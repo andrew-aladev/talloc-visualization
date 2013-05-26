@@ -1,0 +1,12 @@
+[submodule "onion"]
+	path = onion
+	url = git@github.com:andrew-aladev/onion.git
+[submodule "backend/onion"]
+	path = backend/onion
+	url = git@github.com:andrew-aladev/onion.git
+[submodule "frontend/viva_graph"]
+	path = frontend/viva_graph
+	url = git@github.com:andrew-aladev/VivaGraphJS.git
+[submodule "frontend/source/javascripts/viva_graph"]
+	path = frontend/source/javascripts/viva_graph
+	url = git@github.com:andrew-aladev/VivaGraphJS.git
