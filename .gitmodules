@@ -10,3 +10,6 @@
 [submodule "frontend/source/javascripts/viva_graph"]
 	path = frontend/source/javascripts/viva_graph
 	url = git@github.com:andrew-aladev/VivaGraphJS.git
+[submodule "backend/wslay"]
+	path = backend/wslay
+	url = git@github.com:andrew-aladev/wslay.git

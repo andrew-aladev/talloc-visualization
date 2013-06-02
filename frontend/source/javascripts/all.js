@@ -1,4 +1,4 @@
 //= require_tree ./vendor
-//= require      ./viva_graph/dist/vivagraph.js
+//= require      ./viva_graph/all.js
 //= require      ./main.js
 //= require_tree ./core

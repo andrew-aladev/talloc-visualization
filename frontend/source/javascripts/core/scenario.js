@@ -14,6 +14,12 @@
         this._timer = $.proxy(this.timer, this);
     }
     
+    Scenario.types = {
+        add : 1,
+        upd : 2,
+        del : 3
+    }
+    
     Scenario.prototype.append_data = function (data) {
         this.queue = this.queue.concat(data);
         if (!this.timeout) {

@@ -1,9 +1,10 @@
 (function ($, undefined) {
     "use strict";
     
-    function Nodes(canvas) {
+    function Nodes(canvas, options) {
         this.canvas = canvas;
         this.ids    = {};
+        this.options = $.extend({}, options);
         
         this.bind();
     }
@@ -15,13 +16,23 @@
     }
     
     Nodes.prototype.set_node = function (event, node) {
-        var id = this.ids[node.address] = this.canvas.graph.getNodesCount();
-        this.canvas.graph.addNode(id, node);
-        
         var parent = node.parent;
+        var parent_id;
         if (parent) {
-            var parent_id = this.ids[parent];
-            this.canvas.graph.addLink(parent_id, id);
+            parent_id = this.ids[parent];
+        }
+        switch (node.type) {
+            case app.Scenario.types.add:
+                var id = this.ids[node.address] = this.canvas.graph.getNodesCount();
+                this.canvas.add_node(id);
+                this.canvas.add_link(id, parent_id);
+                break;
+            case app.Scenario.types.upd:
+                this.canvas.upd_node(this.ids[node.address]);
+                break;
+            case app.Scenario.types.del:
+                this.canvas.del_node(this.ids[node.address]);
+                break;
         }
     }
     
