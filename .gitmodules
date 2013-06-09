@@ -19,3 +19,6 @@
 [submodule "backend/talloc2"]
 	path = backend/talloc2
 	url = git@github.com:andrew-aladev/talloc2.git
+[submodule "backend/libbtr"]
+	path = backend/libbtr
+	url = git@github.com:andrew-aladev/libbtr.git

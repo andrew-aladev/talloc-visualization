@@ -95,26 +95,6 @@ void tv_accept ( tv_sockets * sockets, tv_socket * socket )
         return;
     }
 
-    char host_buf[NI_MAXHOST], port_buf[NI_MAXSERV];
-    if ( getnameinfo ( &in_addr, in_len, host_buf, NI_MAXHOST, port_buf, NI_MAXSERV, NI_NUMERICHOST | NI_NUMERICSERV ) != 0 ) {
-        talloc_free ( connection );
-        return;
-    }
-
-    char * host = talloc_strdup ( connection, host_buf );
-    if ( host == NULL ) {
-        talloc_free ( connection );
-        return;
-    }
-    connection->host = host;
-
-    char * port = talloc_strdup ( connection, port_buf );
-    if ( port == NULL ) {
-        talloc_free ( connection );
-        return;
-    }
-    connection->port = port;
-
     int connection_fd_flags = fcntl ( connection_fd, F_GETFL, 0 );
     if ( fcntl ( connection_fd, F_SETFL, connection_fd_flags | O_NONBLOCK ) == -1 ) {
         talloc_free ( connection );

@@ -8,6 +8,9 @@
 #include <talloc2/ext/destructor.h>
 #include <talloc2/utils/buffer.h>
 
+#include <wslay/wslay.h>
+#include <wslay/event.h>
+
 typedef struct tv_sockets_t {
     tv_list * socket_list;
     int epoll_fd;
@@ -19,11 +22,28 @@ typedef struct tv_socket_t {
     tv_list * connection_list;
 } tv_socket;
 
+enum {
+    TV_CONNECTION_STATUS_RAW = 0,
+    TV_CONNECTION_STATUS_HANDSHAKE_SENDING,
+    TV_CONNECTION_STATUS_HANDSHAKE_SENDED
+};
+
 typedef struct tv_connection_t {
     int fd;
-    char * host;
-    char * port;
-    talloc_buffer * buffer;
+    uint8_t status;
+    talloc_buffer * request;
+    char * upgrade;
+    size_t upgrade_length;
+    char * key;
+    size_t key_length;
+    char * version;
+    size_t version_length;
+    
+    void * response;
+    void * response_ptr;
+    size_t response_length;
+    
+    wslay_event_context * events;
 } tv_connection;
 
 uint8_t tv_bind   ( tv_sockets * sockets, const char * port );
@@ -114,10 +134,23 @@ tv_connection * tv_connection_new ( void * ctx )
     if ( connection == NULL ) {
         return NULL;
     }
-    connection->fd     = -1;
-    connection->host   = NULL;
-    connection->port   = NULL;
-    connection->buffer = NULL;
+    connection->fd      = -1;
+    connection->status  = TV_CONNECTION_STATUS_RAW;
+    connection->request = NULL;
+    
+    connection->upgrade = NULL;
+    connection->key     = NULL;
+    connection->version = NULL;
+    connection->upgrade_length = 0;
+    connection->key_length     = 0;
+    connection->version_length = 0;
+    
+    connection->response        = NULL;
+    connection->response_ptr    = NULL;
+    connection->response_length = 0;
+    
+    connection->events = NULL;
+    
     if ( talloc_set_destructor ( connection, tv_connection_close ) != 0 ) {
         talloc_free ( connection );
         return NULL;

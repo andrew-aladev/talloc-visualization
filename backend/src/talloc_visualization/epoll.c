@@ -78,7 +78,7 @@ uint8_t tv_sockets_wait ( tv_sockets * sockets )
                 if ( event->is_socket ) {
                     tv_accept ( sockets, event->data );
                 } else {
-                    tv_read ( event->data );
+                    tv_process ( event->data );
                 }
             }
         }
@@ -101,7 +101,7 @@ uint8_t tv_connection_wait ( tv_sockets * sockets, tv_connection * connection )
 
     struct epoll_event connection_event;
     connection_event.data.ptr = event;
-    connection_event.events   = EPOLLIN | EPOLLET;
+    connection_event.events   = EPOLLIN | EPOLLOUT | EPOLLET;
 
     if ( epoll_ctl ( sockets->epoll_fd, EPOLL_CTL_ADD, connection->fd, &connection_event ) == -1 ) {
         talloc_free ( event );
