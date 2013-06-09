@@ -13,3 +13,9 @@
 [submodule "backend/wslay"]
 	path = backend/wslay
 	url = git@github.com:andrew-aladev/wslay.git
+[submodule "talloc2"]
+	path = talloc2
+	url = git@github.com:andrew-aladev/talloc2.git
+[submodule "backend/talloc2"]
+	path = backend/talloc2
+	url = git@github.com:andrew-aladev/talloc2.git

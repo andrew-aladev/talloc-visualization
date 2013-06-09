@@ -45,6 +45,7 @@
     
     Canvas.prototype.init = function () {
         this.graph    = Viva.Graph.graph();
+        // this.graph    = Viva.Graph.generator().balancedBinTree(8);
         this.layout   = Viva.Graph.Layout.forceDirected(this.graph, this.options.layout);
         this.graphics = Viva.Graph.View.webglGraphics();
         
