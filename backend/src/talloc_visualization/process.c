@@ -26,11 +26,9 @@ void tv_process ( tv_connection * connection )
         }
         break;
     case TV_CONNECTION_STATUS_HANDSHAKE_SENDED:
-//         if ( wslay_event_want_write ( connection->events ) ) {
-//             if ( wslay_event_send ( connection->events ) != 0 ) {
-//                 talloc_free ( connection );
-//             }
-//         }
+        if ( tv_write ( connection, NULL, 0 ) != 0 ) {
+            talloc_free ( connection );
+        }
         break;
     }
 }
@@ -74,13 +72,17 @@ uint8_t tv_read ( tv_connection * connection, tv_callback callback )
 
 uint8_t tv_write ( tv_connection * connection, tv_callback callback, int flags )
 {
+    if ( connection->response_length == 0 ) {
+        return 1;
+    }
+
     flags |= MSG_DONTWAIT;
-    
+
     size_t response_length = connection->response_length;
     ssize_t sended_length  = send ( connection->fd, connection->response_ptr, response_length, flags );
     if ( sended_length == -1 ) {
         if ( errno != EAGAIN && errno != EWOULDBLOCK ) {
-            return 1;
+            return 2;
         }
     } else {
         response_length -= sended_length;
@@ -93,7 +95,7 @@ uint8_t tv_write ( tv_connection * connection, tv_callback callback, int flags )
         connection->response_ptr    += sended_length;
         connection->response_length = response_length;
         if ( callback != NULL && callback ( connection ) != 0 ) {
-            return 2;
+            return 3;
         }
     }
 

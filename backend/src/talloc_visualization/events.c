@@ -2,8 +2,41 @@
 #include "process.h"
 
 #include <errno.h>
-#include <wslay/context.h>
+#include <sys/time.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
+
+#include <wslay/context.h>
+
+static inline
+uint8_t tv_options ( tv_connection * connection )
+{
+    struct timeval tv;
+    if ( gettimeofday ( &tv, NULL ) == -1 ) {
+        return 1;
+    }
+    uint64_t timestamp = htobe64 ( ( tv.tv_sec ) * 1000 + ( tv.tv_usec ) / 1000 );
+    const uint8_t sizeof_ptr = sizeof ( uintptr_t );
+
+    uint8_t msg[9];
+    msg[0] = sizeof_ptr;
+    memcpy ( msg + 1, &timestamp, 8 );
+
+    wslay_event_msg message;
+    message.opcode     = WSLAY_BINARY_FRAME;
+    message.msg        = msg;
+    message.msg_length = sizeof ( msg );
+
+    wslay_event_context * events = connection->events;
+    if (
+        wslay_event_queue_msg ( events, &message ) < 0 ||
+        wslay_event_send ( events ) < 0
+    ) {
+        return 2;
+    }
+
+    return 0;
+}
 
 uint8_t tv_handshake_sended ( tv_connection * connection )
 {
@@ -24,18 +57,8 @@ uint8_t tv_handshake_sended ( tv_connection * connection )
     connection->events = events;
     connection->status = TV_CONNECTION_STATUS_HANDSHAKE_SENDED;
 
-    uint8_t msg[] = {0x1, 0x2, 0x3, 0x4, 0x5};
-
-    wslay_event_msg message;
-    message.opcode     = WSLAY_BINARY_FRAME;
-    message.msg        = msg;
-    message.msg_length = sizeof ( msg );
-
-    if (
-        wslay_event_queue_msg ( events, &message ) < 0 ||
-        wslay_event_send ( events ) < 0
-    ) {
-        return 2;
+    if ( tv_options ( connection ) != 0 ) {
+        return 1;
     }
 
     return 0;
@@ -58,7 +81,7 @@ ssize_t tv_event_send_callback ( wslay_event_context * ctx, const uint8_t * data
         send_flags |= MSG_MORE;
     }
 
-    if ( tv_write ( connection, NULL, flags ) != 0 ) {
+    if ( tv_write ( connection, NULL, send_flags ) != 0 ) {
         wslay_event_set_error ( ctx, WSLAY_ERR_CALLBACK_FAILURE );
         talloc_free ( connection );
         return -1;
