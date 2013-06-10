@@ -34,14 +34,12 @@ uint8_t tv_bind ( tv_sockets * sockets, const char * port )
     while ( addr != NULL ) {
         socket_fd = socket ( addr->ai_family, addr->ai_socktype, addr->ai_protocol );
         if ( socket_fd == -1 ) {
-            talloc_free ( sockets );
             freeaddrinfo ( addrs );
             return 2;
         }
 
         socket_ptr = tv_socket_new ( sockets->socket_list );
         if ( socket_ptr == NULL ) {
-            talloc_free ( sockets );
             freeaddrinfo ( addrs );
             return 3;
         }
@@ -53,21 +51,30 @@ uint8_t tv_bind ( tv_sockets * sockets, const char * port )
             fcntl ( socket_fd, F_SETFL, socket_fd_flags | O_NONBLOCK ) == -1 ||
             setsockopt ( socket_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof ( yes ) ) == -1
         ) {
-            talloc_free ( sockets );
+            talloc_free ( socket_ptr );
             freeaddrinfo ( addrs );
             return 5;
         }
 
+        // by default ipv6 address will try to listen on both ipv4 and ipv6 address
+        if ( addr->ai_family == AF_INET6 ) {
+            if ( setsockopt ( socket_fd, IPPROTO_IPV6, IPV6_V6ONLY, &yes, sizeof ( yes ) ) == -1 ) {
+                talloc_free ( socket_ptr );
+                freeaddrinfo ( addrs );
+                return 6;
+            }
+        }
+
         if ( bind ( socket_fd, addr->ai_addr, addr->ai_addrlen ) == -1 ) {
-            talloc_free ( sockets );
+            talloc_free ( socket_ptr );
             freeaddrinfo ( addrs );
-            return 6;
+            return 7;
         }
 
         if ( tv_list_append ( sockets->socket_list, socket_ptr ) != 0 ) {
-            talloc_free ( sockets );
+            talloc_free ( socket_ptr );
             freeaddrinfo ( addrs );
-            return 7;
+            return 8;
         }
 
         addr = addr->ai_next;
