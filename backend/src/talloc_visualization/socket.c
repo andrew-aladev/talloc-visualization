@@ -127,7 +127,7 @@ extern inline
 uint8_t tv_socket_close ( void * data );
 
 extern inline
-tv_connection * tv_connection_new ( void * ctx );
+tv_connection * tv_connection_new ( tv_list * connection_list );
 
 extern inline
 uint8_t tv_connection_close ( void * data );

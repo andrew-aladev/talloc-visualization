@@ -1,5 +1,6 @@
 #include "handshake.h"
 #include "process.h"
+#include "events.h"
 
 #include <libbtr/btih.h>
 #include <gnutls/gnutls.h>
@@ -72,7 +73,8 @@ uint8_t tv_header_response ( tv_connection * connection, const char * answer, si
     strncpy ( response + header_start_length, answer, length );
     strncpy ( response + header_start_length + length, header_end, header_end_length );
 
-    connection->status = TV_CONNECTION_STATUS_HANDSHAKE_SENDING;
+    connection->status         = TV_CONNECTION_STATUS_HANDSHAKE_SENDING;
+    connection->write_callback = tv_handshake_sended;
 
     tv_process ( connection );
 
@@ -82,8 +84,10 @@ uint8_t tv_header_response ( tv_connection * connection, const char * answer, si
 static const char *  magic        = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 static const uint8_t magic_length = 36;
 
-uint8_t tv_handshake ( tv_connection * connection )
+uint8_t tv_handshake ( void * data )
 {
+    tv_connection * connection = data;
+    
     if ( tv_parse_header ( connection ) != 0 ) {
         return 1;
     }

@@ -42,7 +42,7 @@
     
     Socket.prototype.message = function (event) {
         if (this.options) {
-            ;
+            this.add_events (event.data);
         } else {
             this.set_options (event.data);
         }
@@ -50,7 +50,7 @@
     
     Socket.read_number = function (bytes, from_index, size) {
         var number = 0;
-        for (var i = 0; i < size; i++) {
+        for (var i = size - 1; i >= 0; i--) {
             number = number * 256 + bytes[from_index + i];
         }
         return number;
@@ -61,7 +61,7 @@
         this.options = {};
         
         var reader = new FileReader();
-        reader.onload = function (event) {
+        reader.onload = function () {
             var bytes = new Uint8Array(this.result);
             self.options = {
                 sizeof_ptr : bytes[0],
@@ -72,23 +72,45 @@
         reader.readAsArrayBuffer(options);
     }
     
-    Socket.prototype.init = function () {
-        app.scenario = new app.Scenario(this.options.start_time);
+    Socket.prototype.add_events = function (events) {
+        var self = this;
         
-        app.scenario.append_data([
-            {
-                type      : app.Scenario.types.add,
-                time_diff : 500,
-                address   : 0x00000001,
-                parent    : null
-            },
-            {
-                type      : app.Scenario.types.add,
-                time_diff : 500,
-                address   : 0x00000002,
-                parent    : 0x00000001
-            }
-        ]);
+        var reader = new FileReader();
+        reader.onload = function () {
+            self.resolve_event_bytes(new Uint8Array(this.result));
+        }
+        reader.readAsArrayBuffer(events);
+    }
+    
+    Socket.prototype.resolve_event_bytes = function (bytes) {
+        var data = [];
+        
+        var type, time_diff;
+        var address, parent;
+        for (var offset = 0; offset < bytes.length; offset += this.packet_size) {
+            var read_offset = offset;
+            type = bytes[read_offset];
+            read_offset++;
+            time_diff = Socket.read_number(bytes, read_offset, 4);
+            read_offset += 4;
+            address = Socket.read_number(bytes, read_offset, this.options.sizeof_ptr);
+            read_offset += this.options.sizeof_ptr;
+            parent = Socket.read_number(bytes, read_offset, this.options.sizeof_ptr);
+            
+            data.push({
+                type      : type,
+                time_diff : time_diff,
+                address   : address,
+                parent    : parent
+            });
+        }
+        
+        app.scenario.append_data(data);
+    }
+    
+    Socket.prototype.init = function () {
+        app.scenario     = new app.Scenario(this.options.start_time);
+        this.packet_size = 5 + 2 * this.options.sizeof_ptr;
     }
     
     app.Socket = Socket;

@@ -1,13 +1,17 @@
 #include "epoll.h"
 #include "socket.h"
 #include "process.h"
+#include "timer.h"
 
 #include <talloc2/ext/destructor.h>
 
+#include <sys/timerfd.h>
+#include <sys/time.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
 #include <stdbool.h>
 #include <errno.h>
+#include <unistd.h>
 
 #define MAX_EVENTS SOMAXCONN
 
@@ -45,8 +49,8 @@ uint8_t tv_sockets_wait ( tv_sockets * sockets )
             talloc_free ( socket_events );
             return 4;
         }
-        event->is_socket = true;
-        event->data      = socket;
+        event->type = TV_EVENT_TYPE_SOCKET;
+        event->data = socket;
 
         socket_event.data.ptr = event;
         socket_event.events   = EPOLLIN | EPOLLET;
@@ -57,6 +61,11 @@ uint8_t tv_sockets_wait ( tv_sockets * sockets )
         }
 
         socket_item = socket_item->prev;
+    }
+
+    if ( tv_timer_wait ( sockets ) != 0 ) {
+        talloc_free ( socket_events );
+        return 5;
     }
 
     int ready_events_count, index;
@@ -75,10 +84,16 @@ uint8_t tv_sockets_wait ( tv_sockets * sockets )
             uint32_t events = socket_event.events;
             if ( events & EPOLLIN ) {
                 tv_event * event = socket_event.data.ptr;
-                if ( event->is_socket ) {
+                switch ( event->type ) {
+                case TV_EVENT_TYPE_SOCKET:
                     tv_accept ( sockets, event->data );
-                } else {
+                    break;
+                case TV_EVENT_TYPE_CONNECTION:
                     tv_process ( event->data );
+                    break;
+                case TV_EVENT_TYPE_TIMER:
+                    tv_timer ( sockets );
+                    break;
                 }
             }
         }
@@ -96,14 +111,47 @@ uint8_t tv_connection_wait ( tv_sockets * sockets, tv_connection * connection )
     if ( event == NULL ) {
         return 1;
     }
-    event->is_socket = false;
-    event->data      = connection;
+    event->type = TV_EVENT_TYPE_CONNECTION;
+    event->data = connection;
 
     struct epoll_event connection_event;
     connection_event.data.ptr = event;
     connection_event.events   = EPOLLIN | EPOLLOUT | EPOLLET;
 
     if ( epoll_ctl ( sockets->epoll_fd, EPOLL_CTL_ADD, connection->fd, &connection_event ) == -1 ) {
+        talloc_free ( event );
+        return 2;
+    }
+    return 0;
+}
+
+uint8_t tv_timer_wait ( tv_sockets * sockets )
+{
+    struct itimerspec its;
+    its.it_interval.tv_sec  = 1;
+    its.it_interval.tv_nsec = 0;
+
+    int timer_fd = timerfd_create ( CLOCK_REALTIME, TFD_NONBLOCK );
+    if ( timer_fd == -1 ) {
+        return 1;
+    }
+    sockets->timer_fd = timer_fd;
+    if ( timerfd_settime ( timer_fd, TFD_TIMER_ABSTIME, &its, NULL ) == -1 ) {
+        return 2;
+    }
+
+    tv_event * event = talloc ( sockets, sizeof ( tv_event ) );
+    if ( event == NULL ) {
+        return 1;
+    }
+    event->type = TV_EVENT_TYPE_TIMER;
+    event->data = NULL;
+
+    struct epoll_event timer_event;
+    timer_event.data.ptr = event;
+    timer_event.events   = EPOLLIN | EPOLLET;
+
+    if ( epoll_ctl ( sockets->epoll_fd, EPOLL_CTL_ADD, timer_fd, &timer_event ) == -1 ) {
         talloc_free ( event );
         return 2;
     }

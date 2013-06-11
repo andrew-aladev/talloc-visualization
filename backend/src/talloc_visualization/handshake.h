@@ -3,6 +3,6 @@
 
 #include "socket.h"
 
-uint8_t tv_handshake ( tv_connection * connection );
+uint8_t tv_handshake ( void * data );
 
 #endif

@@ -1,12 +1,6 @@
 (function ($, undefined) {
     "use strict";
     
-    // {
-    //   time_diff : 5000 (miliseconds),
-    //   address   : 0x12345678, (unique hex, not null)
-    //   parent    : 0x11111111, (unique hex, maybe null)
-    // }
-    
     function Scenario(start_time) {
         this.queue        = [];
         this.current_time = start_time;
@@ -15,9 +9,10 @@
     }
     
     Scenario.types = {
-        add : 1,
-        upd : 2,
-        del : 3
+        add  : 0,
+        upd  : 1,
+        move : 2,
+        del  : 3
     }
     
     Scenario.prototype.append_data = function (data) {

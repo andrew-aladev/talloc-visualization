@@ -16,24 +16,25 @@ void tv_process ( tv_connection * connection )
 {
     switch ( connection->status ) {
     case TV_CONNECTION_STATUS_RAW:
-        if ( tv_read ( connection, tv_handshake ) != 0 ) {
+        connection->read_callback = tv_handshake;
+        if ( tv_read ( connection ) != 0 ) {
             talloc_free ( connection );
         }
         break;
     case TV_CONNECTION_STATUS_HANDSHAKE_SENDING:
-        if ( tv_write ( connection, tv_handshake_sended, 0 ) != 0 ) {
+        if ( tv_write ( connection, 0 ) != 0 ) {
             talloc_free ( connection );
         }
         break;
     case TV_CONNECTION_STATUS_HANDSHAKE_SENDED:
-        if ( tv_write ( connection, NULL, 0 ) != 0 ) {
+        if ( tv_write ( connection, 0 ) != 0 ) {
             talloc_free ( connection );
         }
         break;
     }
 }
 
-uint8_t tv_read ( tv_connection * connection, tv_callback callback )
+uint8_t tv_read ( tv_connection * connection )
 {
     talloc_buffer * request = connection->request;
     if ( request == NULL ) {
@@ -58,11 +59,18 @@ uint8_t tv_read ( tv_connection * connection, tv_callback callback )
             } else {
                 return 3;
             }
+        } else if ( count == 0 ) {
+            talloc_buffer_cut ( request, BUFFER_SIZE );
+            talloc_free ( request );
+            return 4;
         } else if ( count != BUFFER_SIZE ) {
             talloc_buffer_cut ( request, BUFFER_SIZE - count );
+
+            tv_callback callback = connection->read_callback;
             if ( callback != NULL && callback ( connection ) != 0 ) {
-                return 4;
+                return 5;
             }
+            connection->read_callback = NULL;
             break;
         }
     }
@@ -70,16 +78,16 @@ uint8_t tv_read ( tv_connection * connection, tv_callback callback )
     return 0;
 }
 
-uint8_t tv_write ( tv_connection * connection, tv_callback callback, int flags )
+uint8_t tv_write ( tv_connection * connection, int flags )
 {
-    if ( connection->response_length == 0 ) {
+    size_t response_length = connection->response_length;
+    if ( response_length == 0 ) {
         return 1;
     }
 
     flags |= MSG_DONTWAIT;
 
-    size_t response_length = connection->response_length;
-    ssize_t sended_length  = send ( connection->fd, connection->response_ptr, response_length, flags );
+    ssize_t sended_length = send ( connection->fd, connection->response_ptr, response_length, flags );
     if ( sended_length == -1 ) {
         if ( errno != EAGAIN && errno != EWOULDBLOCK ) {
             return 2;
@@ -91,12 +99,15 @@ uint8_t tv_write ( tv_connection * connection, tv_callback callback, int flags )
             connection->response        = NULL;
             connection->response_ptr    = NULL;
             connection->response_length = 0;
+
+            tv_callback callback = connection->write_callback;
+            if ( callback != NULL && callback ( connection ) != 0 ) {
+                return 3;
+            }
+            connection->write_callback = NULL;
         }
         connection->response_ptr    += sended_length;
         connection->response_length = response_length;
-        if ( callback != NULL && callback ( connection ) != 0 ) {
-            return 3;
-        }
     }
 
     return 0;

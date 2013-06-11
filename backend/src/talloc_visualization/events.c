@@ -1,8 +1,8 @@
 #include "events.h"
 #include "process.h"
+#include "talloc_events.h"
 
 #include <errno.h>
-#include <sys/time.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
@@ -11,11 +11,7 @@
 static inline
 uint8_t tv_options ( tv_connection * connection )
 {
-    struct timeval tv;
-    if ( gettimeofday ( &tv, NULL ) == -1 ) {
-        return 1;
-    }
-    uint64_t timestamp = htobe64 ( ( tv.tv_sec ) * 1000 + ( tv.tv_usec ) / 1000 );
+    uint64_t      timestamp  = talloc_events->start_time;
     const uint8_t sizeof_ptr = sizeof ( uintptr_t );
 
     uint8_t msg[9];
@@ -28,18 +24,47 @@ uint8_t tv_options ( tv_connection * connection )
     message.msg_length = sizeof ( msg );
 
     wslay_event_context * events = connection->events;
+    talloc_events_lock = true;
     if (
         wslay_event_queue_msg ( events, &message ) < 0 ||
         wslay_event_send ( events ) < 0
     ) {
-        return 2;
+        return 1;
     }
 
     return 0;
 }
 
-uint8_t tv_handshake_sended ( tv_connection * connection )
+static inline
+uint8_t tv_initial_events ( tv_connection * connection )
 {
+    wslay_event_msg message;
+    message.opcode     = WSLAY_BINARY_FRAME;
+    message.msg        = talloc_events->buffer;
+    message.msg_length = connection->talloc_events_buffer_length = talloc_events->buffer_size;
+
+    wslay_event_context * events = connection->events;
+    talloc_events_lock = true;
+    if (
+        wslay_event_queue_msg ( events, &message ) < 0 ||
+        wslay_event_send ( events ) < 0
+    ) {
+        return 1;
+    }
+
+    return 0;
+}
+
+uint8_t tv_talloc_events_sended ( void * data )
+{
+    talloc_events_lock = false;
+    return 0;
+}
+
+uint8_t tv_handshake_sended ( void * data )
+{
+    tv_connection * connection = data;
+
     struct wslay_event_callbacks callbacks;
     callbacks.recv_callback     = NULL;
     callbacks.send_callback     = tv_event_send_callback;
@@ -60,11 +85,14 @@ uint8_t tv_handshake_sended ( tv_connection * connection )
     if ( tv_options ( connection ) != 0 ) {
         return 1;
     }
+    if ( tv_initial_events ( connection ) != 0 ) {
+        return 2;
+    }
 
     return 0;
 }
 
-ssize_t tv_event_send_callback ( wslay_event_context * ctx, const uint8_t * data, size_t len, int flags, void * user_data )
+ssize_t tv_event_send_callback ( wslay_event_context * ctx, const uint8_t * data, size_t len, int flags, void * user_data, bool user_data_sending )
 {
     tv_connection * connection = user_data;
     uint8_t * response_data    = talloc ( connection, sizeof ( uint8_t ) * len );
@@ -81,9 +109,14 @@ ssize_t tv_event_send_callback ( wslay_event_context * ctx, const uint8_t * data
         send_flags |= MSG_MORE;
     }
 
-    if ( tv_write ( connection, NULL, send_flags ) != 0 ) {
+    if ( user_data_sending ) {
+        connection->write_callback = tv_talloc_events_sended;
+    } else {
+        connection->write_callback = NULL;
+    }
+
+    if ( tv_write ( connection, send_flags ) != 0 ) {
         wslay_event_set_error ( ctx, WSLAY_ERR_CALLBACK_FAILURE );
-        talloc_free ( connection );
         return -1;
     } else if ( errno == EAGAIN || errno == EWOULDBLOCK ) {
         wslay_event_set_error ( ctx, WSLAY_ERR_WOULDBLOCK );

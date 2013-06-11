@@ -9,6 +9,7 @@
 
 typedef struct tv_list_item_t {
     struct tv_list_item_t * prev;
+    struct tv_list_item_t * next;
     void * data;
 } tv_list_item;
 
@@ -41,11 +42,31 @@ uint8_t tv_list_append ( tv_list * list, void * data )
         return 2;
     }
     item->data = data;
-    item->prev = list->last_item;
+
+    tv_list_item * last_item = list->last_item;
+    if ( last_item != NULL ) {
+        last_item->next = item;
+    }
+    item->prev = last_item;
+    item->next = NULL;
 
     list->last_item = item;
     list->length++;
     return 0;
+}
+
+inline
+void tv_list_delete ( tv_list * list, tv_list_item * item )
+{
+    tv_list_item * next = item->next;
+    tv_list_item * prev = item->prev;
+    if ( next != NULL ) {
+        next->prev = prev;
+    }
+    if ( prev != NULL ) {
+        prev->next = next;
+    }
+    list->length --;
 }
 
 inline

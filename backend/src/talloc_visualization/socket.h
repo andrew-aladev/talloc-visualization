@@ -13,6 +13,7 @@
 
 typedef struct tv_sockets_t {
     tv_list * socket_list;
+    int timer_fd;
     int epoll_fd;
     struct epoll_event * events;
 } tv_sockets;
@@ -28,7 +29,11 @@ enum {
     TV_CONNECTION_STATUS_HANDSHAKE_SENDED
 };
 
+typedef uint8_t ( * tv_callback ) ( void * data );
+
 typedef struct tv_connection_t {
+    tv_list * connection_list;
+
     int fd;
     uint8_t status;
     talloc_buffer * request;
@@ -38,12 +43,17 @@ typedef struct tv_connection_t {
     size_t key_length;
     char * version;
     size_t version_length;
-    
+
     void * response;
     void * response_ptr;
     size_t response_length;
-    
+
+    tv_callback read_callback;
+    tv_callback write_callback;
+
     wslay_event_context * events;
+
+    size_t talloc_events_buffer_length;
 } tv_connection;
 
 uint8_t tv_bind   ( tv_sockets * sockets, const char * port );
@@ -56,6 +66,11 @@ uint8_t tv_sockets_close ( void * data )
     if ( sockets->epoll_fd != -1 ) {
         if ( close ( sockets->epoll_fd ) != 0 ) {
             return 1;
+        }
+    }
+    if ( sockets->timer_fd != -1 ) {
+        if ( close ( sockets->timer_fd ) != 0 ) {
+            return 2;
         }
     }
     return 0;
@@ -75,6 +90,7 @@ tv_sockets * tv_sockets_new ( void * ctx )
     }
     sockets->socket_list = list;
     sockets->epoll_fd    = -1;
+    sockets->timer_fd    = -1;
     if ( talloc_set_destructor ( sockets, tv_sockets_close ) != 0 ) {
         talloc_free ( sockets );
         return NULL;
@@ -124,33 +140,50 @@ uint8_t tv_connection_close ( void * data )
             return 1;
         }
     }
+
+    tv_list_item * connection_item = connection->connection_list->last_item;
+    while ( connection_item != NULL ) {
+        if ( connection_item->data == connection ) {
+            tv_list_delete ( connection->connection_list, connection_item );
+            break;
+        }
+        connection_item = connection_item->prev;
+    }
+
     return 0;
 }
 
 inline
-tv_connection * tv_connection_new ( void * ctx )
+tv_connection * tv_connection_new ( tv_list * connection_list )
 {
-    tv_connection * connection = talloc ( ctx, sizeof ( tv_connection ) );
+    tv_connection * connection = talloc ( connection_list, sizeof ( tv_connection ) );
     if ( connection == NULL ) {
         return NULL;
     }
+    connection->connection_list = connection_list;
+
     connection->fd      = -1;
     connection->status  = TV_CONNECTION_STATUS_RAW;
     connection->request = NULL;
-    
+
     connection->upgrade = NULL;
     connection->key     = NULL;
     connection->version = NULL;
     connection->upgrade_length = 0;
     connection->key_length     = 0;
     connection->version_length = 0;
-    
+
     connection->response        = NULL;
     connection->response_ptr    = NULL;
     connection->response_length = 0;
-    
+
+    connection->read_callback  = NULL;
+    connection->write_callback = NULL;
+
     connection->events = NULL;
-    
+
+    connection->talloc_events_buffer_length = 0;
+
     if ( talloc_set_destructor ( connection, tv_connection_close ) != 0 ) {
         talloc_free ( connection );
         return NULL;
