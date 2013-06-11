@@ -136,7 +136,7 @@ uint8_t tv_timer_wait ( tv_sockets * sockets )
         return 1;
     }
     sockets->timer_fd = timer_fd;
-    if ( timerfd_settime ( timer_fd, TFD_TIMER_ABSTIME, &its, NULL ) == -1 ) {
+    if ( timerfd_settime ( timer_fd, 0, &its, NULL ) == -1 ) {
         return 2;
     }
 
